@@ -1,0 +1,18 @@
+{
+  "name": "executor-convex",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "pnpm": ">=10 <11"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @executor-convex/web dev",
+    "convex": "pnpm --filter @executor-convex/backend dev",
+    "dev:all": "pnpm --filter @executor-convex/backend dev & pnpm --filter @executor-convex/web dev",
+    "test": "pnpm --filter @executor-convex/backend test",
+    "typecheck": "pnpm --filter @executor-convex/backend typecheck && pnpm --filter @executor-convex/web typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

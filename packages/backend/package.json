@@ -1,0 +1,26 @@
+{
+  "name": "@executor-convex/backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy",
+    "typecheck": "tsc --noEmit -p convex/tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "convex": "^1.25.4",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.5",
+    "convex-test": "^0.0.41",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
