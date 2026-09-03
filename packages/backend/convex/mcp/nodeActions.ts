@@ -72,9 +72,16 @@ export const handleMcpRequest = internalAction({
     const raw = await ctx.runQuery(internal.internalCatalog.loadCatalog, {});
     const connections = [];
     for (const connection of raw.connections) {
+      const resolved = await headersForConnection(connection);
+      if (resolved.oauthUpdate) {
+        await ctx.runMutation(internal.internalOauth.saveTokens, {
+          connectionId: connection._id,
+          ...resolved.oauthUpdate,
+        });
+      }
       connections.push({
         ...connection,
-        headers: await headersForConnection(connection),
+        headers: resolved.headers,
       });
     }
 

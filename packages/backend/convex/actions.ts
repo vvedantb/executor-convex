@@ -29,8 +29,14 @@ export const refreshConnection = action({
     if (!connection) throw new Error("Connection not found");
 
     try {
-      const headers = await headersForConnection(connection);
-      const tools = await indexConnection(connection.url, headers);
+      const resolved = await headersForConnection(connection);
+      if (resolved.oauthUpdate) {
+        await ctx.runMutation(internal.internalOauth.saveTokens, {
+          connectionId: args.connectionId,
+          ...resolved.oauthUpdate,
+        });
+      }
+      const tools = await indexConnection(connection.url, resolved.headers);
       return await ctx.runMutation(internal.internalCatalog.replaceConnectionTools, {
         connectionId: args.connectionId,
         tools,

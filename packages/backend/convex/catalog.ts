@@ -1,6 +1,12 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { requireAdmin, requireKey } from "./auth";
+import {
+  googleOAuthConfigured,
+  PRESETS,
+  presetBySlug,
+  slackOAuthConfigured,
+} from "./presets";
 import { headerValidator, policyValidator } from "./schema";
 
 const NAMESPACE = /^[a-z][a-z0-9_]{0,47}$/;
@@ -25,8 +31,17 @@ function publicConnection(doc: {
   lastError?: string;
   lastIndexedAt?: number;
   clerkUserId?: string;
+  authKind?: "none" | "bearer" | "clerk" | "oauth";
+  oauthRefreshToken?: string;
+  oauthAccessToken?: string;
   createdAt: number;
 }) {
+  const hasOauth = Boolean(
+    doc.authKind === "oauth" || doc.oauthRefreshToken || doc.oauthAccessToken,
+  );
+  const authKind =
+    doc.authKind ??
+    (doc.clerkUserId ? "clerk" : hasOauth ? "oauth" : doc.headers.length ? "bearer" : "none");
   return {
     _id: doc._id,
     integrationId: doc.integrationId,
@@ -35,10 +50,13 @@ function publicConnection(doc: {
     headerKeys: doc.headers.map((header) => header.key),
     hasAuth:
       Boolean(doc.clerkUserId) ||
+      hasOauth ||
       doc.headers.some(
         (header) => header.key.toLowerCase() === "authorization",
       ),
     hasClerkAuth: Boolean(doc.clerkUserId),
+    hasOauth,
+    authKind,
     status: doc.status,
     lastError: doc.lastError,
     lastIndexedAt: doc.lastIndexedAt,
@@ -151,18 +169,89 @@ export const createIntegration = mutation({
         value: `Bearer ${args.bearerToken.trim()}`,
       });
     }
+    const clerkUserId =
+      args.clerkUserId ??
+      (args.useClerkAuth && admin.kind === "clerk"
+        ? admin.clerkUserId
+        : undefined);
     const connectionId = await ctx.db.insert("connections", {
       integrationId,
       name: args.kind === "eva" ? "Eva MCP" : "Default",
       url,
       headers,
       status: "pending",
-      clerkUserId:
-        args.clerkUserId ??
-        (args.useClerkAuth && admin.kind === "clerk"
-          ? admin.clerkUserId
-          : undefined),
+      clerkUserId,
       clerkApp: args.clerkApp,
+      authKind: clerkUserId
+        ? "clerk"
+        : args.bearerToken?.trim()
+          ? "bearer"
+          : "none",
+      createdAt: now,
+    });
+    return { integrationId, connectionId };
+  },
+});
+
+export const listPresets = query({
+  args: { apiKey: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.apiKey);
+    const googleReady = googleOAuthConfigured();
+    const slackReady = slackOAuthConfigured();
+    return PRESETS.map((preset) => ({
+      slug: preset.slug,
+      name: preset.name,
+      namespace: preset.namespace,
+      url: preset.url,
+      auth: preset.auth,
+      description: preset.description,
+      available:
+        preset.auth === "google"
+          ? googleReady
+          : preset.auth === "slack"
+            ? slackReady
+            : true,
+    }));
+  },
+});
+
+export const createFromPreset = mutation({
+  args: {
+    apiKey: v.optional(v.string()),
+    slug: v.string(),
+  },
+  handler: async (ctx, args) => {
+    await requireAdmin(ctx, args.apiKey);
+    const preset = presetBySlug(args.slug);
+    const existing = await ctx.db
+      .query("integrations")
+      .withIndex("by_namespace", (q) => q.eq("namespace", preset.namespace))
+      .unique();
+    if (existing) {
+      const connection = await ctx.db
+        .query("connections")
+        .withIndex("by_integration", (q) => q.eq("integrationId", existing._id))
+        .first();
+      if (!connection) throw new Error("Preset connection is missing");
+      return { integrationId: existing._id, connectionId: connection._id };
+    }
+    const now = Date.now();
+    const integrationId = await ctx.db.insert("integrations", {
+      name: preset.name,
+      namespace: preset.namespace,
+      kind: "mcp",
+      createdAt: now,
+    });
+    const connectionId = await ctx.db.insert("connections", {
+      integrationId,
+      name: preset.name,
+      url: preset.url,
+      headers: [],
+      status: "pending",
+      authKind: preset.auth === "bearer" ? "bearer" : "oauth",
+      oauthScopes: preset.scopes?.join(" "),
+      oauthResource: preset.url,
       createdAt: now,
     });
     return { integrationId, connectionId };
@@ -186,7 +275,11 @@ export const updateConnectionAuth = mutation({
       key: "Authorization",
       value: `Bearer ${args.bearerToken.trim()}`,
     });
-    await ctx.db.patch(args.connectionId, { headers, status: "pending" });
+    await ctx.db.patch(args.connectionId, {
+      headers,
+      status: "pending",
+      authKind: "bearer",
+    });
   },
 });
 
@@ -209,6 +302,10 @@ export const removeIntegration = mutation({
         .withIndex("by_connection", (q) => q.eq("connectionId", connection._id))
         .collect();
       for (const tool of tools) await ctx.db.delete(tool._id);
+      const states = await ctx.db.query("oauthStates").collect();
+      for (const row of states) {
+        if (row.connectionId === connection._id) await ctx.db.delete(row._id);
+      }
       await ctx.db.delete(connection._id);
     }
     await ctx.db.delete(args.integrationId);
@@ -271,7 +368,12 @@ export const listCatalogForMcp = query({
     const tools = await ctx.db.query("tools").collect();
     return {
       integrations,
-      connections,
+      connections: connections.map((connection) => ({
+        ...connection,
+        oauthAccessToken: undefined,
+        oauthRefreshToken: undefined,
+        oauthClientSecret: undefined,
+      })),
       tools,
     };
   },

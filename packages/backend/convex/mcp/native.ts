@@ -1,5 +1,6 @@
 import { httpAction } from "../_generated/server";
 import { internal } from "../_generated/api";
+import { webAppUrl } from "./oauth";
 
 function extractBearerToken(authHeader: string | null): string | null {
   if (!authHeader) return null;
@@ -56,6 +57,37 @@ export const protectedResourceMetadata = httpAction(async (_ctx, request) => {
     },
     { headers: corsHeaders(request) },
   );
+});
+
+export const oauthCallback = httpAction(async (ctx, request) => {
+  const incoming = new URL(request.url);
+  const app = webAppUrl();
+  const fail = (message: string) =>
+    Response.redirect(
+      `${app}/integrations?oauth_error=${encodeURIComponent(message)}`,
+      302,
+    );
+  const error = incoming.searchParams.get("error");
+  const code = incoming.searchParams.get("code");
+  const state = incoming.searchParams.get("state");
+  if (error) return fail(error);
+  if (!code || !state) return fail("missing_code");
+  try {
+    const result = await ctx.runAction(internal.oauthActions.finishOauth, {
+      code,
+      state,
+    });
+    const query = result.error
+      ? `oauth_error=${encodeURIComponent(result.error)}`
+      : "oauth=connected";
+    return Response.redirect(
+      `${app}/integrations/${result.integrationId}?${query}`,
+      302,
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "oauth_failed";
+    return fail(message);
+  }
 });
 
 export const health = httpAction(async (_ctx, request) => {

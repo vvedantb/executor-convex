@@ -21,6 +21,7 @@ function IntegrationDetail() {
     adminArgs === "skip" ? "skip" : { ...adminArgs, integrationId },
   );
   const refresh = useAction(api.actions.refreshConnection);
+  const startOauth = useAction(api.oauthActions.startOauth);
   const setPolicy = useMutation(api.catalog.setToolPolicy);
   const updateAuth = useMutation(api.catalog.updateConnectionAuth);
   const bindClerk = useMutation(api.catalog.bindConnectionClerk);
@@ -83,11 +84,13 @@ function IntegrationDetail() {
           <Field
             label="Bearer token"
             hint={
-              connection.hasClerkAuth
-                ? "This connection uses the shared vmem Clerk app. Refresh tools after signing in."
-                : connection.hasAuth
-                  ? "A token is stored. Paste a new one to rotate it."
-                : "Paste a bearer token, or connect with Clerk for vmem."
+              connection.hasOauth
+                ? "This connection uses OAuth. Reconnect if tools start failing, or paste a token."
+                : connection.hasClerkAuth
+                  ? "This connection uses the shared vmem Clerk app. Refresh tools after signing in."
+                  : connection.hasAuth
+                    ? "A token is stored. Paste a new one to rotate it."
+                    : "Paste a bearer token, connect with OAuth, or bind Clerk for vmem."
             }
           >
             <Input
@@ -130,6 +133,29 @@ function IntegrationDetail() {
             >
               {busy ? "Working…" : "Refresh tools"}
             </Button>
+            {connection.hasOauth || connection.authKind === "oauth" ? (
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  setError(null);
+                  void startOauth({
+                    ...adminArgs,
+                    connectionId: connection._id as Id<"connections">,
+                  })
+                    .then((result) => {
+                      window.location.href = result.authorizeUrl;
+                    })
+                    .catch((err: Error) => {
+                      setError(err.message);
+                      setBusy(false);
+                    });
+                }}
+              >
+                {connection.hasAuth ? "Reconnect OAuth" : "Connect with OAuth"}
+              </Button>
+            ) : null}
             {isSignedIn ? (
               <Button
                 variant="ghost"

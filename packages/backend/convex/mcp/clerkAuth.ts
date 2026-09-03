@@ -1,6 +1,7 @@
 "use node";
 
 import { createClerkClient } from "@clerk/backend";
+import { refreshAccessToken } from "./oauth";
 
 function requiredEnv(name: string): string {
   const value = process.env[name];
@@ -53,20 +54,77 @@ export async function verifyClerkBearer(
   return null;
 }
 
-export async function headersForConnection(connection: {
+export type ConnectionAuth = {
   headers: Array<{ key: string; value: string }>;
   clerkUserId?: string;
   clerkApp?: string;
-}): Promise<Array<{ key: string; value: string }>> {
-  if (!connection.clerkUserId) return connection.headers;
-  const token = await mintClerkSessionToken(
-    connection.clerkUserId,
-    connection.clerkApp,
-  );
-  const headers = connection.headers.filter(
-    (header) => header.key.toLowerCase() !== "authorization",
-  );
-  return [{ key: "Authorization", value: `Bearer ${token}` }, ...headers];
+  oauthAccessToken?: string;
+  oauthRefreshToken?: string;
+  oauthExpiresAt?: number;
+  oauthClientId?: string;
+  oauthClientSecret?: string;
+  tokenEndpoint?: string;
+  oauthResource?: string;
+};
+
+export type ResolvedAuth = {
+  headers: Array<{ key: string; value: string }>;
+  oauthUpdate?: {
+    oauthAccessToken: string;
+    oauthRefreshToken?: string;
+    oauthExpiresAt?: number;
+  };
+};
+
+export async function headersForConnection(
+  connection: ConnectionAuth,
+): Promise<ResolvedAuth> {
+  if (connection.clerkUserId) {
+    const token = await mintClerkSessionToken(
+      connection.clerkUserId,
+      connection.clerkApp,
+    );
+    const headers = connection.headers.filter(
+      (header) => header.key.toLowerCase() !== "authorization",
+    );
+    return {
+      headers: [{ key: "Authorization", value: `Bearer ${token}` }, ...headers],
+    };
+  }
+
+  if (connection.oauthAccessToken || connection.oauthRefreshToken) {
+    let accessToken = connection.oauthAccessToken;
+    let oauthUpdate: ResolvedAuth["oauthUpdate"];
+    const expiring =
+      !connection.oauthExpiresAt ||
+      connection.oauthExpiresAt < Date.now() + 30_000;
+    if (expiring && connection.oauthRefreshToken && connection.tokenEndpoint) {
+      const tokens = await refreshAccessToken(connection.tokenEndpoint, {
+        refreshToken: connection.oauthRefreshToken,
+        clientId: connection.oauthClientId,
+        clientSecret: connection.oauthClientSecret,
+        resource: connection.oauthResource,
+      });
+      accessToken = tokens.accessToken;
+      oauthUpdate = {
+        oauthAccessToken: tokens.accessToken,
+        oauthRefreshToken: tokens.refreshToken,
+        oauthExpiresAt: tokens.expiresAt,
+      };
+    }
+    if (!accessToken) {
+      throw new Error("OAuth connection has no access token. Reconnect it.");
+    }
+    const headers = connection.headers.filter(
+      (header) => header.key.toLowerCase() !== "authorization",
+    );
+    return {
+      headers: [{ key: "Authorization", value: `Bearer ${accessToken}` }, ...headers],
+      oauthUpdate,
+    };
+  }
+
+  return { headers: connection.headers };
 }
 
 function tokenFromMinted(minted: unknown): string {

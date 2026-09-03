@@ -1,5 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMutation, useQuery } from "convex/react";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { api } from "@executor-convex/backend";
 import { Badge, Button, Card, Field, Input } from "@/components/ui";
@@ -7,19 +7,28 @@ import { useAdminArgs } from "@/lib/auth";
 
 export const Route = createFileRoute("/integrations")({
   component: Integrations,
+  validateSearch: (search: Record<string, unknown>) => ({
+    oauth: typeof search.oauth === "string" ? search.oauth : undefined,
+    oauth_error:
+      typeof search.oauth_error === "string" ? search.oauth_error : undefined,
+  }),
 });
 
 function Integrations() {
   const adminArgs = useAdminArgs();
+  const navigate = useNavigate();
+  const notice = Route.useSearch();
   const integrations = useQuery(api.catalog.listIntegrations, adminArgs);
+  const presets = useQuery(api.catalog.listPresets, adminArgs);
   const create = useMutation(api.catalog.createIntegration);
+  const connectPreset = useAction(api.oauthActions.connectPreset);
   const [kind, setKind] = useState<"eva" | "mcp">("eva");
   const [name, setName] = useState("Eva");
   const [namespace, setNamespace] = useState("eva");
   const [url, setUrl] = useState("");
   const [token, setToken] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
 
   if (adminArgs === "skip") return null;
 
@@ -28,10 +37,68 @@ function Integrations() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Integrations</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-          Add Eva or any streamable-HTTP MCP server. Executor indexes its tools,
-          namespaces them, and serves them from one Convex <code>/mcp</code>{" "}
-          endpoint you plug into every app.
+          Connect hosted MCP servers. Executor indexes their tools, namespaces
+          them, and serves them from one Convex <code>/mcp</code> endpoint.
         </p>
+      </div>
+
+      {notice.oauth === "connected" ? (
+        <p className="text-sm text-accent">OAuth connected. Tools are indexed.</p>
+      ) : null}
+      {notice.oauth_error ? (
+        <p className="text-sm text-danger">{notice.oauth_error}</p>
+      ) : null}
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {(presets ?? []).map((preset) => (
+          <Card key={preset.slug} className="flex flex-col gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="font-medium">{preset.name}</p>
+                <Badge tone={preset.available ? "ok" : "warn"}>
+                  {preset.auth === "google"
+                    ? "Google OAuth"
+                    : preset.auth === "slack"
+                      ? "Slack OAuth"
+                      : preset.auth === "bearer"
+                        ? "Token"
+                        : "OAuth"}
+                </Badge>
+              </div>
+              <p className="mt-1 text-sm text-muted">{preset.description}</p>
+            </div>
+            <Button
+              disabled={Boolean(busy) || !preset.available}
+              onClick={() => {
+                setBusy(preset.slug);
+                setError(null);
+                void connectPreset({ ...adminArgs, slug: preset.slug })
+                  .then((result) => {
+                    if (result.authorizeUrl) {
+                      window.location.href = result.authorizeUrl;
+                      return;
+                    }
+                    void navigate({
+                      to: "/integrations/$id",
+                      params: { id: result.integrationId },
+                    });
+                  })
+                  .catch((err: Error) => setError(err.message))
+                  .finally(() => setBusy(null));
+              }}
+            >
+              {busy === preset.slug
+                ? "Connecting…"
+                : preset.available
+                  ? preset.auth === "bearer"
+                    ? "Add"
+                    : "Connect"
+                  : preset.auth === "slack"
+                    ? "Needs Slack OAuth app"
+                    : "Needs Google OAuth client"}
+            </Button>
+          </Card>
+        ))}
       </div>
 
       <Card className="space-y-4">
@@ -102,9 +169,9 @@ function Integrations() {
         </Field>
         {error ? <p className="text-sm text-danger">{error}</p> : null}
         <Button
-          disabled={busy || !url}
+          disabled={Boolean(busy) || !url}
           onClick={() => {
-            setBusy(true);
+            setBusy("custom");
             setError(null);
             void create({
               ...adminArgs,
@@ -120,10 +187,10 @@ function Integrations() {
                 setToken("");
               })
               .catch((err: Error) => setError(err.message))
-              .finally(() => setBusy(false));
+              .finally(() => setBusy(null));
           }}
         >
-          {busy ? "Adding…" : kind === "eva" ? "Add Eva" : "Add MCP"}
+          {busy === "custom" ? "Adding…" : kind === "eva" ? "Add Eva" : "Add MCP"}
         </Button>
       </Card>
 

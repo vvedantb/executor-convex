@@ -98,4 +98,36 @@ describe("catalog + keys", () => {
       }),
     ).rejects.toThrow(/already in use/);
   });
+
+  test("lists presets and creates Notion from a slug", async () => {
+    const t = convexTest(schema, modules);
+    const keys = await t.mutation(api.auth.setup, {});
+    const presets = await t.query(api.catalog.listPresets, {
+      apiKey: keys.adminKey,
+    });
+    expect(presets.map((preset) => preset.slug)).toContain("notion");
+    expect(presets.find((preset) => preset.slug === "gmail")?.available).toBe(
+      false,
+    );
+    expect(presets.find((preset) => preset.slug === "slack")?.available).toBe(
+      false,
+    );
+
+    const first = await t.mutation(api.catalog.createFromPreset, {
+      apiKey: keys.adminKey,
+      slug: "notion",
+    });
+    const again = await t.mutation(api.catalog.createFromPreset, {
+      apiKey: keys.adminKey,
+      slug: "notion",
+    });
+    expect(again.integrationId).toBe(first.integrationId);
+    const detail = await t.query(api.catalog.getIntegration, {
+      apiKey: keys.adminKey,
+      integrationId: first.integrationId,
+    });
+    expect(detail?.integration.namespace).toBe("notion");
+    expect(detail?.connections[0]?.url).toBe("https://mcp.notion.com/mcp");
+    expect(detail?.connections[0]?.hasOauth).toBe(true);
+  });
 });

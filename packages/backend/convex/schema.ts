@@ -47,8 +47,33 @@ const schema = defineSchema({
     lastIndexedAt: v.optional(v.number()),
     clerkUserId: v.optional(v.string()),
     clerkApp: v.optional(v.string()),
+    authKind: v.optional(
+      v.union(
+        v.literal("none"),
+        v.literal("bearer"),
+        v.literal("clerk"),
+        v.literal("oauth"),
+      ),
+    ),
+    oauthClientId: v.optional(v.string()),
+    oauthClientSecret: v.optional(v.string()),
+    tokenEndpoint: v.optional(v.string()),
+    authorizationEndpoint: v.optional(v.string()),
+    oauthScopes: v.optional(v.string()),
+    oauthResource: v.optional(v.string()),
+    oauthAccessToken: v.optional(v.string()),
+    oauthRefreshToken: v.optional(v.string()),
+    oauthExpiresAt: v.optional(v.number()),
     createdAt: v.number(),
   }).index("by_integration", ["integrationId"]),
+
+  oauthStates: defineTable({
+    state: v.string(),
+    codeVerifier: v.string(),
+    connectionId: v.id("connections"),
+    expiresAt: v.number(),
+    createdAt: v.number(),
+  }).index("by_state", ["state"]),
 
   tools: defineTable({
     connectionId: v.id("connections"),

@@ -2,6 +2,7 @@ import { httpRouter } from "convex/server";
 import {
   health,
   mcpHandler,
+  oauthCallback,
   oauthMetadata,
   optionsHandler,
   protectedResourceMetadata,
@@ -25,6 +26,8 @@ http.route({ path: "/mcp", method: "OPTIONS", handler: optionsHandler });
 http.route({ path: "/mcp", method: "GET", handler: mcpHandler });
 http.route({ path: "/mcp", method: "POST", handler: mcpHandler });
 http.route({ path: "/mcp", method: "DELETE", handler: mcpHandler });
+
+http.route({ path: "/oauth/callback", method: "GET", handler: oauthCallback });
 
 http.route({ path: "/health", method: "GET", handler: health });
 
