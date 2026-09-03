@@ -96,10 +96,20 @@ export function presetBySlug(slug: string): Preset {
   return preset;
 }
 
-export function googleOAuthConfigured(): boolean {
-  return Boolean(
-    process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+export function googleClientId(): string | undefined {
+  return (
+    process.env.GOOGLE_OAUTH_CLIENT_ID ?? process.env.GOOGLE_CLIENT_ID
   );
+}
+
+export function googleClientSecret(): string | undefined {
+  return (
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET ?? process.env.GOOGLE_CLIENT_SECRET
+  );
+}
+
+export function googleOAuthConfigured(): boolean {
+  return Boolean(googleClientId() && googleClientSecret());
 }
 
 export function slackOAuthConfigured(): boolean {

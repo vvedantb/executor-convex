@@ -1,0 +1,5 @@
+{
+  "installCommand": "cd ../.. && pnpm install --frozen-lockfile --filter @executor-convex/web...",
+  "buildCommand": "cd ../.. && pnpm --filter @executor-convex/web build",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}

@@ -4,7 +4,13 @@ import { v } from "convex/values";
 import { action, internalAction, type ActionCtx } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { googleOAuthConfigured, presetBySlug, slackOAuthConfigured } from "./presets";
+import {
+  googleClientId,
+  googleClientSecret,
+  googleOAuthConfigured,
+  presetBySlug,
+  slackOAuthConfigured,
+} from "./presets";
 import { indexConnection } from "./mcp/gateway";
 import {
   buildAuthorizeUrl,
@@ -58,8 +64,8 @@ async function authorizeUrlForConnection(
   let clientId = connection.oauthClientId;
   let clientSecret = connection.oauthClientSecret;
   if (provider === "google") {
-    clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-    clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+    clientId = googleClientId();
+    clientSecret = googleClientSecret();
     if (!clientId || !clientSecret) {
       throw new Error(
         "Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET on the Convex deployment",

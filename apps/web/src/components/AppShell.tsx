@@ -62,7 +62,8 @@ export function AppShell() {
   return (
     <div className="min-h-screen bg-bg">
       <aside className="fixed inset-y-0 left-0 hidden w-56 border-r border-line bg-card/60 px-4 py-6 md:block">
-        <Link to="/integrations" className="block px-2 text-sm font-semibold tracking-tight">
+        <Link to="/integrations" className="flex items-center gap-2 px-2 text-sm font-semibold tracking-tight">
+          <img src="/favicon.png" alt="" width={22} height={22} className="rounded-md" />
           Executor
         </Link>
         <p className="mt-1 px-2 text-xs text-muted">Convex MCP catalog</p>
@@ -96,7 +97,10 @@ export function AppShell() {
       </aside>
       <div className="md:pl-56">
         <header className="flex items-center justify-between border-b border-line px-6 py-4 md:hidden">
-          <span className="text-sm font-semibold">Executor</span>
+          <span className="flex items-center gap-2 text-sm font-semibold">
+            <img src="/favicon.png" alt="" width={20} height={20} className="rounded-md" />
+            Executor
+          </span>
           <nav className="flex gap-3 text-sm text-muted">
             {NAV.map((item) => (
               <Link key={item.to} to={item.to}>

@@ -7,4 +7,6 @@ dist
 .env.local
 .env*.local
 .convex
+.vercel
 packages/backend/convex/_generated/ai
+.env*
