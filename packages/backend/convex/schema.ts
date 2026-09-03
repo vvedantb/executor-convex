@@ -45,6 +45,8 @@ const schema = defineSchema({
     ),
     lastError: v.optional(v.string()),
     lastIndexedAt: v.optional(v.number()),
+    clerkUserId: v.optional(v.string()),
+    clerkApp: v.optional(v.string()),
     createdAt: v.number(),
   }).index("by_integration", ["integrationId"]),
 

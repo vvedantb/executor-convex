@@ -67,6 +67,13 @@ describe("catalog + keys", () => {
     await expect(
       t.query(api.catalog.listIntegrations, { apiKey: keys.mcpKey }),
     ).rejects.toThrow(/Admin/);
+
+    expect(
+      await t.query(api.auth.validate, { apiKey: keys.adminKey }),
+    ).toMatchObject({ ok: true, role: "admin" });
+    expect(
+      await t.query(api.auth.validate, { apiKey: "exc_admin_nope" }),
+    ).toEqual({ ok: false });
   });
 
   test("rejects a duplicate namespace", async () => {

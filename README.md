@@ -17,23 +17,36 @@ Same shape as Eva: a web app talking to a Convex backend that also serves MCP ov
 
 ```bash
 pnpm install
-pnpm convex          # packages/backend — local or cloud Convex deployment
+pnpm convex          # packages/backend — cloud deployment pleasant-toucan-139
 pnpm dev             # apps/web at http://127.0.0.1:5173
 ```
 
-Copy Convex URLs into `apps/web/.env.local`:
-
-```
-VITE_CONVEX_URL=https://<deployment>.convex.cloud
-VITE_CONVEX_SITE_URL=https://<deployment>.convex.site
-```
-
-For the local backend those are `http://127.0.0.1:3210` and `http://127.0.0.1:3211`.
-
-This project is linked to the Convex cloud deployment
+This project uses the Convex cloud deployment
 `pleasant-toucan-139` (team `vedantb`, project `executor`).
 
-Open the console, run first-time setup, add the Eva MCP URL + bearer token, then point Cursor / Claude / any MCP client at:
+Copy Convex + Clerk into `apps/web/.env.local` (same Clerk app as vmem):
+
+```
+VITE_CONVEX_URL=https://pleasant-toucan-139.eu-west-1.convex.cloud
+VITE_CONVEX_SITE_URL=https://pleasant-toucan-139.eu-west-1.convex.site
+VITE_CLERK_PUBLISHABLE_KEY=pk_test_…
+```
+
+And into `packages/backend/.env.local` plus the Convex deployment
+(`npx convex env set` in `packages/backend`):
+
+```
+CONVEX_DEPLOYMENT=dev:pleasant-toucan-139
+CONVEX_URL=https://pleasant-toucan-139.eu-west-1.convex.cloud
+CONVEX_SITE_URL=https://pleasant-toucan-139.eu-west-1.convex.site
+CLERK_FRONTEND_API_URL=https://<clerk>.clerk.accounts.dev
+CLERK_PUBLISHABLE_KEY=pk_test_…
+CLERK_SECRET_KEY=sk_test_…
+WEB_APP_URL=http://127.0.0.1:5173
+```
+
+Open the console, sign in with the vmem Clerk app (or paste an admin key),
+add Eva / vmem, then point Cursor / Claude / any MCP client at:
 
 ```
 https://pleasant-toucan-139.eu-west-1.convex.site/mcp
@@ -48,8 +61,11 @@ Eva already hosts MCP on Convex at `{CONVEX_SITE_URL}/mcp`. In Executor, use the
 2. Bearer token: an Eva MCP OAuth access token (or an Eva-issued internal bearer)
 3. Namespace: `eva` (tools become `eva__list_repositories`, …)
 
-vmem is the same kind of connection at
-`https://outgoing-reindeer-268.eu-west-1.convex.site/mcp` (Clerk OAuth bearer).
+vmem uses the same Clerk app. Sign in to the console with Clerk, then
+**Connect with Clerk** on the vmem integration. Executor mints a short-lived
+Clerk session token for each vmem call — no pasted bearer required.
+
+vmem MCP: `https://outgoing-reindeer-268.eu-west-1.convex.site/mcp`
 
 Refresh the connection to index tools, then set per-tool policy.
 

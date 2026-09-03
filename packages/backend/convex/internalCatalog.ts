@@ -84,6 +84,7 @@ export const replaceConnectionTools = internalMutation({
     }
     await ctx.db.patch(args.connectionId, {
       status: "ready",
+      lastError: undefined,
       lastIndexedAt: now,
     });
     return { toolCount: args.tools.length };

@@ -18,7 +18,13 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
-    dedupe: ["react", "react-dom", "convex", "@tanstack/react-router"],
+    dedupe: [
+      "react",
+      "react-dom",
+      "convex",
+      "@tanstack/react-router",
+      "@clerk/clerk-react",
+    ],
   },
   server: {
     host: "127.0.0.1",

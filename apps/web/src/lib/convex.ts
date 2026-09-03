@@ -1,19 +1,14 @@
 import { ConvexReactClient } from "convex/react";
+import { env } from "@/env";
 
-const url = import.meta.env.VITE_CONVEX_URL ?? "";
-const siteUrl = import.meta.env.VITE_CONVEX_SITE_URL ?? "";
-
-export const convex = new ConvexReactClient(url);
+export const convex = new ConvexReactClient(env.VITE_CONVEX_URL);
 
 export function convexConfigured(): boolean {
-  return url.length > 0;
+  return env.VITE_CONVEX_URL.length > 0;
 }
 
 export function convexSiteUrl(): string {
+  const siteUrl = env.VITE_CONVEX_SITE_URL ?? "";
   if (siteUrl) return siteUrl.replace(/\/$/, "");
-  if (!url) return "https://<deployment>.convex.site";
-  if (url.includes("127.0.0.1:3210") || url.includes("localhost:3210")) {
-    return url.replace(":3210", ":3211").replace(/\/$/, "");
-  }
-  return url.replace(/\.convex\.cloud\/?$/, ".convex.site");
+  return env.VITE_CONVEX_URL.replace(/\.convex\.cloud\/?$/, ".convex.site");
 }

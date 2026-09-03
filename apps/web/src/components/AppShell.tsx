@@ -1,5 +1,9 @@
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { useAdminKey } from "@/lib/auth";
+import { SignInButton, UserButton } from "@clerk/clerk-react";
+import { Link, Navigate, Outlet, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "convex/react";
+import { useEffect } from "react";
+import { api } from "@executor-convex/backend";
+import { setAdminKey, useAdminKey, useConsoleAuth } from "@/lib/auth";
 import { cn } from "./ui";
 
 const NAV = [
@@ -10,11 +14,44 @@ const NAV = [
 
 export function AppShell() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { isLoaded, isSignedIn, authed } = useConsoleAuth();
   const key = useAdminKey();
+  const validity = useQuery(
+    api.auth.validate,
+    isSignedIn ? {} : key ? { apiKey: key } : "skip",
+  );
   const publicRoute =
     pathname === "/setup" || pathname === "/login" || pathname === "/";
 
-  if (publicRoute || !key) {
+  useEffect(() => {
+    if (!isSignedIn && validity && !validity.ok) setAdminKey(null);
+  }, [isSignedIn, validity]);
+
+  if (!isLoaded && !publicRoute) {
+    return (
+      <div className="min-h-screen bg-bg">
+        <p className="px-6 py-16 text-sm text-muted">Checking session…</p>
+      </div>
+    );
+  }
+
+  if (key && !isSignedIn && validity === undefined && !publicRoute) {
+    return (
+      <div className="min-h-screen bg-bg">
+        <p className="px-6 py-16 text-sm text-muted">Checking session…</p>
+      </div>
+    );
+  }
+
+  if (key && !isSignedIn && validity && !validity.ok && !publicRoute) {
+    return <Navigate to="/login" />;
+  }
+
+  if (!authed && !publicRoute) {
+    return <Navigate to="/login" />;
+  }
+
+  if (publicRoute || !authed) {
     return (
       <div className="min-h-screen bg-bg">
         <Outlet />
@@ -45,6 +82,17 @@ export function AppShell() {
             </Link>
           ))}
         </nav>
+        <div className="absolute bottom-6 left-4 right-4 flex items-center justify-between px-2">
+          {isSignedIn ? (
+            <UserButton />
+          ) : (
+            <SignInButton mode="modal">
+              <button className="text-xs text-muted hover:text-fg">
+                Clerk sign in
+              </button>
+            </SignInButton>
+          )}
+        </div>
       </aside>
       <div className="md:pl-56">
         <header className="flex items-center justify-between border-b border-line px-6 py-4 md:hidden">

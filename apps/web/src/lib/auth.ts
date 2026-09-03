@@ -1,3 +1,5 @@
+import { useAuth } from "@clerk/clerk-react";
+import { useConvexAuth } from "convex/react";
 import { useSyncExternalStore } from "react";
 
 const KEY = "executor-convex.adminKey";
@@ -29,4 +31,25 @@ export function useAdminKey(): string | null {
     () => current,
     () => null,
   );
+}
+
+export function useAdminArgs(): { apiKey?: string } | "skip" {
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const apiKey = useAdminKey();
+  if (isLoading) return "skip";
+  if (isAuthenticated) return apiKey ? { apiKey } : {};
+  if (apiKey) return { apiKey };
+  return "skip";
+}
+
+export function useConsoleAuth() {
+  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoading, isAuthenticated } = useConvexAuth();
+  const apiKey = useAdminKey();
+  return {
+    isLoaded: isLoaded && !isLoading,
+    isSignedIn: Boolean(isSignedIn || isAuthenticated),
+    apiKey,
+    authed: Boolean(isAuthenticated || isSignedIn || apiKey),
+  };
 }

@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.3",
     "@executor-convex/backend": "workspace:*",
     "@tanstack/react-router": "^1.120.0",
     "convex": "^1.25.4",
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.12",
     "@tanstack/router-plugin": "^1.120.0",
+    "@types/node": "^22.20.1",
     "@types/react": "^19.1.12",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.2",

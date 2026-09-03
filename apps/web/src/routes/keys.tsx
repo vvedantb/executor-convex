@@ -3,22 +3,22 @@ import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { api } from "@executor-convex/backend";
 import { Badge, Button, Card, Field, Input } from "@/components/ui";
-import { setAdminKey, useAdminKey } from "@/lib/auth";
+import { setAdminKey, useAdminArgs } from "@/lib/auth";
 
 export const Route = createFileRoute("/keys")({
   component: Keys,
 });
 
 function Keys() {
-  const apiKey = useAdminKey();
-  const keys = useQuery(api.auth.listKeys, apiKey ? { apiKey } : "skip");
+  const adminArgs = useAdminArgs();
+  const keys = useQuery(api.auth.listKeys, adminArgs);
   const create = useMutation(api.auth.createKey);
   const revoke = useMutation(api.auth.revokeKey);
   const [name, setName] = useState("App");
   const [role, setRole] = useState<"admin" | "mcp">("mcp");
   const [created, setCreated] = useState<string | null>(null);
 
-  if (!apiKey) return null;
+  if (adminArgs === "skip") return null;
 
   return (
     <div className="space-y-8">
@@ -49,7 +49,7 @@ function Keys() {
         </div>
         <Button
           onClick={() => {
-            void create({ apiKey, name, role }).then((result) =>
+            void create({ ...adminArgs, name, role }).then((result) =>
               setCreated(result.key),
             );
           }}
@@ -77,7 +77,7 @@ function Keys() {
             </div>
             <Button
               variant="danger"
-              onClick={() => void revoke({ apiKey, keyId: key._id })}
+              onClick={() => void revoke({ ...adminArgs, keyId: key._id })}
             >
               Revoke
             </Button>

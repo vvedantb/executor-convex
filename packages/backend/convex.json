@@ -1,3 +1,6 @@
 {
-  "typescriptCompiler": "tsc"
+  "typescriptCompiler": "tsc",
+  "node": {
+    "externalPackages": ["@clerk/backend"]
+  }
 }

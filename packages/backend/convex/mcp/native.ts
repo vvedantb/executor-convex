@@ -9,12 +9,19 @@ function extractBearerToken(authHeader: string | null): string | null {
   return parts[1] ?? null;
 }
 
+function requiredEnvUrl(name: string): string {
+  const url = process.env[name];
+  if (!url) throw new Error(`${name} is not set in Convex env`);
+  return url.replace(/\/$/, "");
+}
+
 function corsHeaders(request: Request): HeadersInit {
   const origin = request.headers.get("Origin") ?? "*";
   return {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-    "Access-Control-Allow-Headers": "Authorization, Content-Type, Accept, MCP-Protocol-Version",
+    "Access-Control-Allow-Headers":
+      "Authorization, Content-Type, Accept, MCP-Protocol-Version",
     "Access-Control-Max-Age": "86400",
   };
 }
@@ -24,18 +31,18 @@ export const optionsHandler = httpAction(async (_ctx, request) => {
 });
 
 export const oauthMetadata = httpAction(async (_ctx, request) => {
-  const baseUrl = new URL(request.url).origin;
-  return Response.json(
-    {
-      issuer: baseUrl,
-      authorization_endpoint: `${baseUrl}/mcp/oauth/authorize`,
-      token_endpoint: `${baseUrl}/mcp/oauth/token`,
-      response_types_supported: ["code"],
-      grant_types_supported: ["authorization_code"],
-      bearer_methods_supported: ["header"],
-    },
-    { headers: corsHeaders(request) },
+  const clerkFrontendApiUrl = requiredEnvUrl("CLERK_FRONTEND_API_URL");
+  const res = await fetch(
+    `${clerkFrontendApiUrl}/.well-known/oauth-authorization-server`,
   );
+  if (!res.ok) {
+    return Response.json(
+      { error: "Failed to fetch authorization server metadata" },
+      { status: 502, headers: corsHeaders(request) },
+    );
+  }
+  const metadata: unknown = await res.json();
+  return Response.json(metadata, { headers: corsHeaders(request) });
 });
 
 export const protectedResourceMetadata = httpAction(async (_ctx, request) => {
@@ -43,8 +50,9 @@ export const protectedResourceMetadata = httpAction(async (_ctx, request) => {
   return Response.json(
     {
       resource: `${baseUrl}/mcp`,
-      authorization_servers: [baseUrl],
+      authorization_servers: [requiredEnvUrl("CLERK_FRONTEND_API_URL")],
       bearer_methods_supported: ["header"],
+      resource_documentation: requiredEnvUrl("WEB_APP_URL"),
     },
     { headers: corsHeaders(request) },
   );

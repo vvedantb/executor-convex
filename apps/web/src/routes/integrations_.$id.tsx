@@ -4,7 +4,7 @@ import { useState } from "react";
 import { api } from "@executor-convex/backend";
 import type { Id } from "@executor-convex/backend";
 import { Badge, Button, Card, Field, Input } from "@/components/ui";
-import { useAdminKey } from "@/lib/auth";
+import { useAdminArgs, useConsoleAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/integrations_/$id")({
   component: IntegrationDetail,
@@ -12,22 +12,24 @@ export const Route = createFileRoute("/integrations_/$id")({
 
 function IntegrationDetail() {
   const { id } = Route.useParams();
-  const apiKey = useAdminKey();
+  const adminArgs = useAdminArgs();
+  const { isSignedIn } = useConsoleAuth();
   const navigate = useNavigate();
   const integrationId = id as Id<"integrations">;
   const detail = useQuery(
     api.catalog.getIntegration,
-    apiKey ? { apiKey, integrationId } : "skip",
+    adminArgs === "skip" ? "skip" : { ...adminArgs, integrationId },
   );
   const refresh = useAction(api.actions.refreshConnection);
   const setPolicy = useMutation(api.catalog.setToolPolicy);
   const updateAuth = useMutation(api.catalog.updateConnectionAuth);
+  const bindClerk = useMutation(api.catalog.bindConnectionClerk);
   const remove = useMutation(api.catalog.removeIntegration);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [token, setToken] = useState("");
 
-  if (!apiKey) return null;
+  if (adminArgs === "skip") return null;
   if (detail === undefined) {
     return <p className="text-sm text-muted">Loading…</p>;
   }
@@ -81,9 +83,11 @@ function IntegrationDetail() {
           <Field
             label="Bearer token"
             hint={
-              connection.hasAuth
-                ? "A token is stored. Paste a new one to rotate it."
-                : "Required for Eva and vmem. Paste an MCP OAuth access token."
+              connection.hasClerkAuth
+                ? "This connection uses the shared vmem Clerk app. Refresh tools after signing in."
+                : connection.hasAuth
+                  ? "A token is stored. Paste a new one to rotate it."
+                : "Paste a bearer token, or connect with Clerk for vmem."
             }
           >
             <Input
@@ -100,7 +104,7 @@ function IntegrationDetail() {
                 setBusy(true);
                 setError(null);
                 void updateAuth({
-                  apiKey,
+                  ...adminArgs,
                   connectionId: connection._id as Id<"connections">,
                   bearerToken: token.trim(),
                 })
@@ -117,7 +121,7 @@ function IntegrationDetail() {
                 setBusy(true);
                 setError(null);
                 void refresh({
-                  apiKey,
+                  ...adminArgs,
                   connectionId: connection._id as Id<"connections">,
                 })
                   .catch((err: Error) => setError(err.message))
@@ -126,6 +130,30 @@ function IntegrationDetail() {
             >
               {busy ? "Working…" : "Refresh tools"}
             </Button>
+            {isSignedIn ? (
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  setError(null);
+                  void bindClerk({
+                    ...adminArgs,
+                    connectionId: connection._id as Id<"connections">,
+                  })
+                    .then(() =>
+                      refresh({
+                        ...adminArgs,
+                        connectionId: connection._id as Id<"connections">,
+                      }),
+                    )
+                    .catch((err: Error) => setError(err.message))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                Connect with Clerk
+              </Button>
+            ) : null}
           </div>
         </Card>
       ) : null}
@@ -152,7 +180,11 @@ function IntegrationDetail() {
                 <Button
                   variant={tool.policy === "allow" ? "primary" : "ghost"}
                   onClick={() =>
-                    void setPolicy({ apiKey, toolId: tool._id, policy: "allow" })
+                    void setPolicy({
+                      ...adminArgs,
+                      toolId: tool._id,
+                      policy: "allow",
+                    })
                   }
                 >
                   Allow
@@ -160,7 +192,11 @@ function IntegrationDetail() {
                 <Button
                   variant={tool.policy === "block" ? "danger" : "ghost"}
                   onClick={() =>
-                    void setPolicy({ apiKey, toolId: tool._id, policy: "block" })
+                    void setPolicy({
+                      ...adminArgs,
+                      toolId: tool._id,
+                      policy: "block",
+                    })
                   }
                 >
                   Block
@@ -176,7 +212,7 @@ function IntegrationDetail() {
       <Button
         variant="danger"
         onClick={() => {
-          void remove({ apiKey, integrationId }).then(() =>
+          void remove({ ...adminArgs, integrationId }).then(() =>
             navigate({ to: "/integrations" }),
           );
         }}

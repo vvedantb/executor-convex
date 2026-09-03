@@ -1,6 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { ClerkProvider } from "@clerk/clerk-react";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
+import { env } from "./env";
 import { routeTree } from "./routeTree.gen";
 import "./globals.css";
 
@@ -16,7 +18,13 @@ const root = document.getElementById("root");
 if (root) {
   createRoot(root).render(
     <StrictMode>
-      <RouterProvider router={router} />
+      <ClerkProvider
+        publishableKey={env.VITE_CLERK_PUBLISHABLE_KEY}
+        signInFallbackRedirectUrl="/integrations"
+        signUpFallbackRedirectUrl="/integrations"
+      >
+        <RouterProvider router={router} />
+      </ClerkProvider>
     </StrictMode>,
   );
 }

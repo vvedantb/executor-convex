@@ -3,18 +3,15 @@ import { useMutation, useQuery } from "convex/react";
 import { useState } from "react";
 import { api } from "@executor-convex/backend";
 import { Badge, Button, Card, Field, Input } from "@/components/ui";
-import { useAdminKey } from "@/lib/auth";
+import { useAdminArgs } from "@/lib/auth";
 
 export const Route = createFileRoute("/integrations")({
   component: Integrations,
 });
 
 function Integrations() {
-  const apiKey = useAdminKey();
-  const integrations = useQuery(
-    api.catalog.listIntegrations,
-    apiKey ? { apiKey } : "skip",
-  );
+  const adminArgs = useAdminArgs();
+  const integrations = useQuery(api.catalog.listIntegrations, adminArgs);
   const create = useMutation(api.catalog.createIntegration);
   const [kind, setKind] = useState<"eva" | "mcp">("eva");
   const [name, setName] = useState("Eva");
@@ -24,7 +21,7 @@ function Integrations() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (!apiKey) return null;
+  if (adminArgs === "skip") return null;
 
   return (
     <div className="space-y-8">
@@ -110,12 +107,13 @@ function Integrations() {
             setBusy(true);
             setError(null);
             void create({
-              apiKey,
+              ...adminArgs,
               name,
               namespace,
               kind,
               url,
               bearerToken: token || undefined,
+              useClerkAuth: kind === "mcp" && !token,
             })
               .then(() => {
                 setUrl("");

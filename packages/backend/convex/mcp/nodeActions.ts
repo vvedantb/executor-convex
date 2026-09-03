@@ -5,9 +5,9 @@ import { internalAction } from "../_generated/server";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import { handleGateway, type GatewayCatalog } from "./gateway";
+import { headersForConnection, verifyClerkBearer } from "./clerkAuth";
 
 function asCatalog(raw: {
-  integrations: Array<{ _id: string }>;
   connections: Array<{
     _id: string;
     url: string;
@@ -46,16 +46,21 @@ export const handleMcpRequest = internalAction({
     body: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, args) => {
-    const key = await ctx.runQuery(internal.internalCatalog.lookupKey, {
-      apiKey: args.apiKey,
-    });
-    if (!key) {
-      return {
-        status: 401,
-        body: JSON.stringify({ error: "Invalid or expired token" }),
-      };
+    const clerk = args.apiKey.startsWith("exc_")
+      ? null
+      : await verifyClerkBearer(args.apiKey);
+    if (!clerk) {
+      const key = await ctx.runQuery(internal.internalCatalog.lookupKey, {
+        apiKey: args.apiKey,
+      });
+      if (!key) {
+        return {
+          status: 401,
+          body: JSON.stringify({ error: "Invalid or expired token" }),
+        };
+      }
+      await ctx.runMutation(internal.internalCatalog.touchKey, { keyId: key._id });
     }
-    await ctx.runMutation(internal.internalCatalog.touchKey, { keyId: key._id });
 
     let parsed: unknown;
     try {
@@ -64,10 +69,16 @@ export const handleMcpRequest = internalAction({
       return { status: 400, body: JSON.stringify({ error: "Invalid JSON body" }) };
     }
 
-    const catalog = asCatalog(
-      await ctx.runQuery(internal.internalCatalog.loadCatalog, {}),
-    );
-    const result = await handleGateway(parsed, catalog, {
+    const raw = await ctx.runQuery(internal.internalCatalog.loadCatalog, {});
+    const connections = [];
+    for (const connection of raw.connections) {
+      connections.push({
+        ...connection,
+        headers: await headersForConnection(connection),
+      });
+    }
+
+    const result = await handleGateway(parsed, asCatalog({ ...raw, connections }), {
       onExecution: async (event) => {
         await ctx.runMutation(internal.internalCatalog.recordExecution, {
           connectionId: event.connectionId as Id<"connections"> | undefined,

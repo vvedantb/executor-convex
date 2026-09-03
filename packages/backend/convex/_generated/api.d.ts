@@ -14,6 +14,7 @@ import type * as catalog from "../catalog.js";
 import type * as crypto from "../crypto.js";
 import type * as http from "../http.js";
 import type * as internalCatalog from "../internalCatalog.js";
+import type * as mcp_clerkAuth from "../mcp/clerkAuth.js";
 import type * as mcp_gateway from "../mcp/gateway.js";
 import type * as mcp_native from "../mcp/native.js";
 import type * as mcp_nodeActions from "../mcp/nodeActions.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   crypto: typeof crypto;
   http: typeof http;
   internalCatalog: typeof internalCatalog;
+  "mcp/clerkAuth": typeof mcp_clerkAuth;
   "mcp/gateway": typeof mcp_gateway;
   "mcp/native": typeof mcp_native;
   "mcp/nodeActions": typeof mcp_nodeActions;

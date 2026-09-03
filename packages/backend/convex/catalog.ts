@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { requireKey } from "./auth";
+import { requireAdmin, requireKey } from "./auth";
 import { headerValidator, policyValidator } from "./schema";
 
 const NAMESPACE = /^[a-z][a-z0-9_]{0,47}$/;
@@ -24,6 +24,7 @@ function publicConnection(doc: {
   status: "pending" | "ready" | "error";
   lastError?: string;
   lastIndexedAt?: number;
+  clerkUserId?: string;
   createdAt: number;
 }) {
   return {
@@ -32,9 +33,12 @@ function publicConnection(doc: {
     name: doc.name,
     url: doc.url,
     headerKeys: doc.headers.map((header) => header.key),
-    hasAuth: doc.headers.some(
-      (header) => header.key.toLowerCase() === "authorization",
-    ),
+    hasAuth:
+      Boolean(doc.clerkUserId) ||
+      doc.headers.some(
+        (header) => header.key.toLowerCase() === "authorization",
+      ),
+    hasClerkAuth: Boolean(doc.clerkUserId),
     status: doc.status,
     lastError: doc.lastError,
     lastIndexedAt: doc.lastIndexedAt,
@@ -43,9 +47,9 @@ function publicConnection(doc: {
 }
 
 export const listIntegrations = query({
-  args: { apiKey: v.string() },
+  args: { apiKey: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await requireKey(ctx, args.apiKey, "admin");
+    await requireAdmin(ctx, args.apiKey);
     const integrations = await ctx.db.query("integrations").collect();
     const connections = await ctx.db.query("connections").collect();
     const tools = await ctx.db.query("tools").collect();
@@ -70,9 +74,12 @@ export const listIntegrations = query({
 });
 
 export const getIntegration = query({
-  args: { apiKey: v.string(), integrationId: v.id("integrations") },
+  args: {
+    apiKey: v.optional(v.string()),
+    integrationId: v.id("integrations"),
+  },
   handler: async (ctx, args) => {
-    await requireKey(ctx, args.apiKey, "admin");
+    await requireAdmin(ctx, args.apiKey);
     const integration = await ctx.db.get(args.integrationId);
     if (!integration) return null;
     const connections = await ctx.db
@@ -107,16 +114,19 @@ export const getIntegration = query({
 
 export const createIntegration = mutation({
   args: {
-    apiKey: v.string(),
+    apiKey: v.optional(v.string()),
     name: v.string(),
     namespace: v.string(),
     kind: v.union(v.literal("eva"), v.literal("mcp")),
     url: v.string(),
     bearerToken: v.optional(v.string()),
     extraHeaders: v.optional(v.array(headerValidator)),
+    useClerkAuth: v.optional(v.boolean()),
+    clerkUserId: v.optional(v.string()),
+    clerkApp: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await requireKey(ctx, args.apiKey, "admin");
+    const admin = await requireAdmin(ctx, args.apiKey);
     const namespace = assertNamespace(args.namespace);
     const clash = await ctx.db
       .query("integrations")
@@ -147,6 +157,12 @@ export const createIntegration = mutation({
       url,
       headers,
       status: "pending",
+      clerkUserId:
+        args.clerkUserId ??
+        (args.useClerkAuth && admin.kind === "clerk"
+          ? admin.clerkUserId
+          : undefined),
+      clerkApp: args.clerkApp,
       createdAt: now,
     });
     return { integrationId, connectionId };
@@ -155,12 +171,12 @@ export const createIntegration = mutation({
 
 export const updateConnectionAuth = mutation({
   args: {
-    apiKey: v.string(),
+    apiKey: v.optional(v.string()),
     connectionId: v.id("connections"),
     bearerToken: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireKey(ctx, args.apiKey, "admin");
+    await requireAdmin(ctx, args.apiKey);
     const connection = await ctx.db.get(args.connectionId);
     if (!connection) throw new Error("Connection not found");
     const headers = connection.headers.filter(
@@ -175,9 +191,12 @@ export const updateConnectionAuth = mutation({
 });
 
 export const removeIntegration = mutation({
-  args: { apiKey: v.string(), integrationId: v.id("integrations") },
+  args: {
+    apiKey: v.optional(v.string()),
+    integrationId: v.id("integrations"),
+  },
   handler: async (ctx, args) => {
-    await requireKey(ctx, args.apiKey, "admin");
+    await requireAdmin(ctx, args.apiKey);
     const connections = await ctx.db
       .query("connections")
       .withIndex("by_integration", (q) =>
@@ -198,17 +217,47 @@ export const removeIntegration = mutation({
 
 export const setToolPolicy = mutation({
   args: {
-    apiKey: v.string(),
+    apiKey: v.optional(v.string()),
     toolId: v.id("tools"),
     policy: policyValidator,
   },
   handler: async (ctx, args) => {
-    await requireKey(ctx, args.apiKey, "admin");
+    await requireAdmin(ctx, args.apiKey);
     const tool = await ctx.db.get(args.toolId);
     if (!tool) throw new Error("Tool not found");
     await ctx.db.patch(args.toolId, {
       policy: args.policy,
       updatedAt: Date.now(),
+    });
+  },
+});
+
+export const bindConnectionClerk = mutation({
+  args: {
+    apiKey: v.optional(v.string()),
+    connectionId: v.id("connections"),
+    clerkUserId: v.optional(v.string()),
+    clerkApp: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const admin = await requireAdmin(ctx, args.apiKey);
+    const clerkUserId =
+      args.clerkUserId ??
+      (admin.kind === "clerk" ? admin.clerkUserId : undefined);
+    if (!clerkUserId) {
+      throw new Error("Sign in with Clerk to bind this connection");
+    }
+    const connection = await ctx.db.get(args.connectionId);
+    if (!connection) throw new Error("Connection not found");
+    const headers = connection.headers.filter(
+      (header) => header.key.toLowerCase() !== "authorization",
+    );
+    await ctx.db.patch(args.connectionId, {
+      headers,
+      clerkUserId,
+      clerkApp: args.clerkApp ?? connection.clerkApp,
+      status: "pending",
+      lastError: undefined,
     });
   },
 });

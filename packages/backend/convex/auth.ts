@@ -22,11 +22,56 @@ export async function requireKey(
   return record;
 }
 
+export async function requireAdmin(
+  ctx: QueryCtx | MutationCtx,
+  apiKey?: string,
+) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (identity?.subject) {
+    return {
+      kind: "clerk" as const,
+      clerkUserId: identity.subject,
+      role: "admin" as const,
+    };
+  }
+  if (!apiKey) {
+    throw new Error("Admin API key required");
+  }
+  const record = await requireKey(ctx, apiKey, "admin");
+  return { kind: "key" as const, ...record };
+}
+
 export const status = query({
   args: {},
   handler: async (ctx) => {
     const keys = await ctx.db.query("apiKeys").take(1);
     return { setupComplete: keys.length > 0 };
+  },
+});
+
+export const me = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity?.subject) return null;
+    return { clerkUserId: identity.subject };
+  },
+});
+
+export const validate = query({
+  args: { apiKey: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (identity?.subject) {
+      return { ok: true as const, role: "admin" as const, name: "Clerk" };
+    }
+    if (!args.apiKey) return { ok: false as const };
+    try {
+      const record = await requireKey(ctx, args.apiKey, "admin");
+      return { ok: true as const, role: record.role, name: record.name };
+    } catch {
+      return { ok: false as const };
+    }
   },
 });
 
@@ -65,12 +110,12 @@ export const setup = mutation({
 
 export const createKey = mutation({
   args: {
-    apiKey: v.string(),
+    apiKey: v.optional(v.string()),
     name: v.string(),
     role: v.union(v.literal("admin"), v.literal("mcp")),
   },
   handler: async (ctx, args) => {
-    await requireKey(ctx, args.apiKey, "admin");
+    await requireAdmin(ctx, args.apiKey);
     const secret = randomToken();
     const key = formatApiKey(args.role, secret);
     const id = await ctx.db.insert("apiKeys", {
@@ -85,9 +130,9 @@ export const createKey = mutation({
 });
 
 export const listKeys = query({
-  args: { apiKey: v.string() },
+  args: { apiKey: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    await requireKey(ctx, args.apiKey, "admin");
+    await requireAdmin(ctx, args.apiKey);
     const keys = await ctx.db.query("apiKeys").collect();
     return keys
       .filter((key) => !key.revokedAt)
@@ -103,10 +148,10 @@ export const listKeys = query({
 });
 
 export const revokeKey = mutation({
-  args: { apiKey: v.string(), keyId: v.id("apiKeys") },
+  args: { apiKey: v.optional(v.string()), keyId: v.id("apiKeys") },
   handler: async (ctx, args) => {
-    const actor = await requireKey(ctx, args.apiKey, "admin");
-    if (actor._id === args.keyId) {
+    const actor = await requireAdmin(ctx, args.apiKey);
+    if (actor.kind === "key" && actor._id === args.keyId) {
       throw new Error("Cannot revoke the key you are using");
     }
     const target = await ctx.db.get(args.keyId);

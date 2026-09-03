@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "convex/react";
 import { api } from "@executor-convex/backend";
 import { Card } from "@/components/ui";
-import { useAdminKey } from "@/lib/auth";
+import { useAdminArgs } from "@/lib/auth";
 import { addMcpCommand, cursorConfig, mcpUrl } from "@/lib/mcpSnippet";
 
 export const Route = createFileRoute("/connect")({
@@ -10,8 +10,8 @@ export const Route = createFileRoute("/connect")({
 });
 
 function Connect() {
-  const apiKey = useAdminKey();
-  const keys = useQuery(api.auth.listKeys, apiKey ? { apiKey } : "skip");
+  const adminArgs = useAdminArgs();
+  const keys = useQuery(api.auth.listKeys, adminArgs);
   const mcpKey = keys?.find((key) => key.role === "mcp");
 
   return (
